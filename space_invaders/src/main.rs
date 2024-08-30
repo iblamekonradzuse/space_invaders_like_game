@@ -2,64 +2,145 @@ use std::io::{self, stdout, Write};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use termion::color;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
+use termion::color;
+use std::fs::OpenOptions;
+use std::io::prelude::*;
+use rand::Rng;
 
 const WIDTH: usize = 60;
 const HEIGHT: usize = 30;
 
 struct Game {
     player: usize,
-    enemies: Vec<(usize, usize)>,
+    enemies: Vec<(usize, usize, char, usize)>, // (x, y, type, color)
     bullets: Vec<(usize, usize)>,
+    powerups: Vec<(usize, usize, char)>, // (x, y, type)
+    explosions: Vec<(usize, usize, u8)>, // (x, y, frame)
     score: u32,
+    high_score: u32,
     level: usize,
     lives: usize,
     enemy_move_counter: usize,
+    powerup_active: Option<char>,
+    powerup_timer: u8,
 }
 
 impl Game {
     fn new() -> Self {
+        let high_score = Game::load_high_score();
         Game {
             player: WIDTH / 2,
             enemies: Vec::new(),
             bullets: Vec::new(),
+            powerups: Vec::new(),
+            explosions: Vec::new(),
             score: 0,
+            high_score,
             level: 1,
             lives: 5,
             enemy_move_counter: 0,
+            powerup_active: None,
+            powerup_timer: 0,
         }
     }
 
-    fn create_enemies(&self) -> Vec<(usize, usize)> {
+    fn load_high_score() -> u32 {
+        if let Ok(mut file) = OpenOptions::new().read(true).open("high_score.txt") {
+            let mut content = String::new();
+            if file.read_to_string(&mut content).is_ok() {
+                if let Ok(score) = content.trim().parse() {
+                    return score;
+                }
+            }
+        }
+        0
+    }
+
+    fn save_high_score(&self) {
+        if self.score > self.high_score {
+            if let Ok(mut file) = OpenOptions::new().write(true).create(true).truncate(true).open("high_score.txt") {
+                let _ = write!(file, "{}", self.score);
+            }
+        }
+    }
+
+    fn create_enemies(&self) -> Vec<(usize, usize, char, usize)> {
         let mut enemies = Vec::new();
+        let mut rng = rand::thread_rng();
         let rows = 1 + self.level / 3;
         let cols = 3 + self.level / 3;
+
         for row in 0..rows {
             for col in 0..cols {
-                enemies.push((col * (WIDTH / (cols + 1)) + 5, row * 2 + 3));
+                let enemy_type = match rng.gen_range(0..3) {
+                    0 => 'Z', // Zigzag
+                    1 => 'W', // Wave
+                    _ => 'D', // Diagonal
+                };
+                let color = rng.gen_range(1..4);
+                enemies.push((
+                    col * (WIDTH / (cols + 1)) + 5,
+                    row * 2 + 3,
+                    enemy_type,
+                    color,
+                ));
             }
         }
         enemies
     }
 
+    fn create_powerup(&mut self) {
+        let mut rng = rand::thread_rng();
+        if rng.gen_bool(0.1) {
+            let powerup_type = match rng.gen_range(0..3) {
+                0 => 'B', // Bigger Laser
+                1 => 'M', // Multi-directional Laser
+                _ => 'S', // Shield
+            };
+            self.powerups.push((rng.gen_range(0..WIDTH), 0, powerup_type));
+        }
+    }
+
     fn update(&mut self) {
+        // Handle powerup timer
+        if let Some(_) = self.powerup_active {
+            if self.powerup_timer > 0 {
+                self.powerup_timer -= 1;
+            } else {
+                self.powerup_active = None;
+            }
+        }
+
         // Move bullets
         self.bullets.retain_mut(|bullet| {
             bullet.1 = bullet.1.saturating_sub(1);
             bullet.1 > 0
         });
 
+        // Move powerups
+        for powerup in &mut self.powerups {
+            powerup.1 += 1;
+        }
+        self.powerups.retain(|powerup| powerup.1 < HEIGHT);
+
         // Check for collisions
         let initial_enemy_count = self.enemies.len();
-        self.enemies
-            .retain(|&enemy| !self.bullets.iter().any(|&bullet| bullet == enemy));
+        self.enemies.retain(|&enemy| {
+            let mut hit = false;
+            for bullet in &self.bullets {
+                if bullet.0 == enemy.0 && bullet.1 == enemy.1 {
+                    hit = true;
+                    self.explosions.push((enemy.0, enemy.1, 0));
+                    break;
+                }
+            }
+            !hit
+        });
         let enemies_destroyed = initial_enemy_count - self.enemies.len();
-
-        // Update score
         self.score += enemies_destroyed as u32 * 10;
 
         // Move enemies
@@ -71,6 +152,15 @@ impl Game {
                 self.enemies = self.create_enemies();
             } else {
                 for enemy in &mut self.enemies {
+                    match enemy.2 {
+                        'Z' => enemy.0 = (enemy.0 + 1) % WIDTH,
+                        'W' => enemy.0 = (enemy.0 + 1) % WIDTH,
+                        'D' => {
+                            enemy.0 = (enemy.0 + 1) % WIDTH;
+                            enemy.1 += 1;
+                        }
+                        _ => {}
+                    }
                     enemy.1 += 1;
                     if enemy.1 >= HEIGHT - 1 {
                         self.lives = self.lives.saturating_sub(1);
@@ -80,13 +170,20 @@ impl Game {
                 }
             }
         }
+
+        // Move explosions
+        for explosion in &mut self.explosions {
+            explosion.2 += 1;
+        }
+        self.explosions.retain(|explosion| explosion.2 < 3);
     }
 
     fn render(&self) -> String {
         let mut output = format!(
-            "{}Score: {} | Level: {} | Lives: {}{}\r\n",
+            "{}Score: {} | High Score: {} | Level: {} | Lives: {}{}\r\n",
             color::Fg(color::Yellow),
             self.score,
+            self.high_score,
             self.level,
             "♥".repeat(self.lives),
             color::Fg(color::Reset)
@@ -97,9 +194,9 @@ impl Game {
         screen[HEIGHT - 1][self.player] = 'A';
 
         // Draw enemies
-        for &(x, y) in &self.enemies {
+        for &(x, y, enemy_type, color) in &self.enemies {
             if y < HEIGHT {
-                screen[y][x] = 'W';
+                screen[y][x] = enemy_type;
             }
         }
 
@@ -110,16 +207,40 @@ impl Game {
             }
         }
 
+        // Draw powerups
+        for &(x, y, powerup_type) in &self.powerups {
+            if y < HEIGHT {
+                screen[y][x] = powerup_type;
+            }
+        }
+
+        // Draw explosions
+        for &(x, y, frame) in &self.explosions {
+            if y < HEIGHT {
+                screen[y][x] = match frame {
+                    0 => '*',
+                    1 => '+',
+                    _ => ' ',
+                };
+            }
+        }
+
         // Convert screen to string with colors
         for (y, row) in screen.iter().enumerate() {
             for (x, &ch) in row.iter().enumerate() {
                 match ch {
                     'A' => output.push_str(&format!("{}", color::Fg(color::Blue))),
-                    'W' => output.push_str(&format!("{}", color::Fg(color::Red))),
+                    'Z' => output.push_str(&format!("{}", color::Fg(color::LightRed))),
+                    'W' => output.push_str(&format!("{}", color::Fg(color::LightMagenta))),
+                    'D' => output.push_str(&format!("{}", color::Fg(color::LightYellow))),
                     '|' => output.push_str(&format!("{}", color::Fg(color::Green))),
+                    '*' | '+' => output.push_str(&format!("{}", color::Fg(color::Red))),
+                    'B' => output.push_str(&format!("{}", color::Fg(color::Cyan))),
+                    'M' => output.push_str(&format!("{}", color::Fg(color::LightGreen))),
+                    'S' => output.push_str(&format!("{}", color::Fg(color::LightBlue))),
                     _ => output.push_str(&format!("{}", color::Fg(color::Reset))),
                 }
-                output.push(ch);
+                                output.push(ch);
             }
             output.push_str(&format!("{}\r\n", color::Fg(color::Reset)));
         }
@@ -132,13 +253,34 @@ impl Game {
             Key::Left => self.player = self.player.saturating_sub(1),
             Key::Right => self.player = (self.player + 1).min(WIDTH - 1),
             Key::Char(' ') => {
-                if self.bullets.len() < 3 {
-                    // Limit the number of bullets
-                    self.bullets.push((self.player, HEIGHT - 2));
+                if self.bullets.len() < 3 {  // Limit the number of bullets
+                    match self.powerup_active {
+                        Some('B') => { // Bigger Laser
+                            self.bullets.push((self.player, HEIGHT - 2));
+                            self.bullets.push((self.player.saturating_sub(1), HEIGHT - 2));
+                            self.bullets.push(((self.player + 1).min(WIDTH - 1), HEIGHT - 2));
+                        }
+                        Some('M') => { // Multi-directional Laser
+                            self.bullets.push((self.player, HEIGHT - 2));
+                            self.bullets.push((self.player.saturating_sub(1), HEIGHT - 2));
+                            self.bullets.push((self.player + 1, HEIGHT - 2));
+                        }
+                        _ => self.bullets.push((self.player, HEIGHT - 2)),
+                    }
                 }
-            }
+            },
             _ => {}
         }
+
+        // Check for powerup collection
+        self.powerups.retain(|&powerup| {
+            if powerup.0 == self.player && powerup.1 == HEIGHT - 1 {
+                self.powerup_active = Some(powerup.2);
+                self.powerup_timer = 100; // Lasts for a few seconds
+                return false;
+            }
+            true
+        });
     }
 
     fn is_game_over(&self) -> bool {
@@ -146,27 +288,19 @@ impl Game {
     }
 }
 
-fn display_start_screen(
-    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
-) -> io::Result<()> {
+fn display_start_screen(screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>) -> io::Result<()> {
     write!(screen, "{}", termion::clear::All)?;
-    write!(
-        screen,
-        "{}{}{}Space Invaders!{}",
+    write!(screen, "{}{}{}Space Invaders!{}",
         termion::cursor::Goto(1, 1),
         termion::style::Bold,
         color::Fg(color::Cyan),
         color::Fg(color::Reset)
     )?;
-    write!(
-        screen,
-        "{}{}Press 'S' to start the game",
+    write!(screen, "{}{}Press 'S' to start the game",
         termion::cursor::Goto(1, 3),
         color::Fg(color::Green)
     )?;
-    write!(
-        screen,
-        "{}{}Press 'Q' to quit",
+    write!(screen, "{}{}Press 'Q' to quit",
         termion::cursor::Goto(1, 5),
         color::Fg(color::Red)
     )?;
@@ -174,44 +308,35 @@ fn display_start_screen(
     Ok(())
 }
 
-fn display_game_over_screen(
-    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
-    score: u32,
-    level: usize,
-) -> io::Result<()> {
+fn display_game_over_screen(screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>, score: u32, level: usize, high_score: u32) -> io::Result<()> {
     write!(screen, "{}", termion::clear::All)?;
-    write!(
-        screen,
-        "{}{}{}Game Over!{}",
+    write!(screen, "{}{}{}Game Over!{}",
         termion::cursor::Goto(1, 1),
         termion::style::Bold,
         color::Fg(color::Red),
         color::Fg(color::Reset)
     )?;
-    write!(
-        screen,
-        "{}{}Final Score: {}",
+    write!(screen, "{}{}Final Score: {}",
         termion::cursor::Goto(1, 3),
         color::Fg(color::Yellow),
         score
     )?;
-    write!(
-        screen,
-        "{}{}Levels Completed: {}",
+    write!(screen, "{}{}Levels Completed: {}",
         termion::cursor::Goto(1, 5),
         color::Fg(color::Yellow),
         level - 1
     )?;
-    write!(
-        screen,
-        "{}{}Press 'R' to play again",
+    write!(screen, "{}{}High Score: {}",
         termion::cursor::Goto(1, 7),
+        color::Fg(color::Cyan),
+        high_score
+    )?;
+    write!(screen, "{}{}Press 'R' to play again",
+        termion::cursor::Goto(1, 9),
         color::Fg(color::Green)
     )?;
-    write!(
-        screen,
-        "{}{}Press 'Q' to quit",
-        termion::cursor::Goto(1, 9),
+    write!(screen, "{}{}Press 'Q' to quit",
+        termion::cursor::Goto(1, 11),
         color::Fg(color::Red)
     )?;
     screen.flush()?;
@@ -258,6 +383,7 @@ fn main() -> io::Result<()> {
                 last_update = Instant::now();
 
                 if game.is_game_over() {
+                    game.save_high_score();
                     break 'game_loop;
                 }
             }
@@ -272,7 +398,7 @@ fn main() -> io::Result<()> {
             thread::sleep(Duration::from_millis(10));
         }
 
-        display_game_over_screen(&mut screen, game.score, game.level)?;
+        display_game_over_screen(&mut screen, game.score, game.level, game.high_score)?;
 
         loop {
             if let Ok(key) = rx.recv() {
@@ -287,4 +413,3 @@ fn main() -> io::Result<()> {
 
     Ok(())
 }
-
