@@ -1,15 +1,15 @@
+use rand::Rng;
+use std::fs::OpenOptions;
+use std::io::prelude::*;
 use std::io::{self, stdout, Write};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use termion::color;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
-use termion::color;
-use std::fs::OpenOptions;
-use std::io::prelude::*;
-use rand::Rng;
 
 const WIDTH: usize = 60;
 const HEIGHT: usize = 30;
@@ -41,7 +41,7 @@ impl Game {
             score: 0,
             high_score,
             level: 1,
-            lives: 5,
+            lives: 1,
             enemy_move_counter: 0,
             powerup_active: None,
             powerup_timer: 0,
@@ -62,7 +62,12 @@ impl Game {
 
     fn save_high_score(&self) {
         if self.score > self.high_score {
-            if let Ok(mut file) = OpenOptions::new().write(true).create(true).truncate(true).open("high_score.txt") {
+            if let Ok(mut file) = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open("high_score.txt")
+            {
                 let _ = write!(file, "{}", self.score);
             }
         }
@@ -101,7 +106,8 @@ impl Game {
                 1 => 'M', // Multi-directional Laser
                 _ => 'S', // Shield
             };
-            self.powerups.push((rng.gen_range(0..WIDTH), 0, powerup_type));
+            self.powerups
+                .push((rng.gen_range(0..WIDTH), 0, powerup_type));
         }
     }
 
@@ -240,7 +246,7 @@ impl Game {
                     'S' => output.push_str(&format!("{}", color::Fg(color::LightBlue))),
                     _ => output.push_str(&format!("{}", color::Fg(color::Reset))),
                 }
-                                output.push(ch);
+                output.push(ch);
             }
             output.push_str(&format!("{}\r\n", color::Fg(color::Reset)));
         }
@@ -253,22 +259,28 @@ impl Game {
             Key::Left => self.player = self.player.saturating_sub(1),
             Key::Right => self.player = (self.player + 1).min(WIDTH - 1),
             Key::Char(' ') => {
-                if self.bullets.len() < 3 {  // Limit the number of bullets
+                if self.bullets.len() < 3 {
+                    // Limit the number of bullets
                     match self.powerup_active {
-                        Some('B') => { // Bigger Laser
+                        Some('B') => {
+                            // Bigger Laser
                             self.bullets.push((self.player, HEIGHT - 2));
-                            self.bullets.push((self.player.saturating_sub(1), HEIGHT - 2));
-                            self.bullets.push(((self.player + 1).min(WIDTH - 1), HEIGHT - 2));
+                            self.bullets
+                                .push((self.player.saturating_sub(1), HEIGHT - 2));
+                            self.bullets
+                                .push(((self.player + 1).min(WIDTH - 1), HEIGHT - 2));
                         }
-                        Some('M') => { // Multi-directional Laser
+                        Some('M') => {
+                            // Multi-directional Laser
                             self.bullets.push((self.player, HEIGHT - 2));
-                            self.bullets.push((self.player.saturating_sub(1), HEIGHT - 2));
+                            self.bullets
+                                .push((self.player.saturating_sub(1), HEIGHT - 2));
                             self.bullets.push((self.player + 1, HEIGHT - 2));
                         }
                         _ => self.bullets.push((self.player, HEIGHT - 2)),
                     }
                 }
-            },
+            }
             _ => {}
         }
 
@@ -287,56 +299,101 @@ impl Game {
         self.lives == 0
     }
 }
-
-fn display_start_screen(screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>) -> io::Result<()> {
+// ssad
+fn display_start_screen(
+    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
+) -> io::Result<()> {
     write!(screen, "{}", termion::clear::All)?;
-    write!(screen, "{}{}{}Space Invaders!{}",
-        termion::cursor::Goto(1, 1),
+    write!(
+        screen,
+        "{}{}{}✰✰✰ S P A C E ✰✰✰  {}",
+        termion::cursor::Goto(10, 8),
         termion::style::Bold,
         color::Fg(color::Cyan),
         color::Fg(color::Reset)
     )?;
-    write!(screen, "{}{}Press 'S' to start the game",
-        termion::cursor::Goto(1, 3),
+    write!(
+        screen,
+        "{}{}{}✰✰ I N V A D E R S ✰✰{}",
+        termion::cursor::Goto(8, 9),
+        termion::style::Bold,
+        color::Fg(color::Cyan),
+        color::Fg(color::Reset)
+    )?;
+    write!(
+        screen,
+        "{}{}Arow keys to move,",
+        termion::cursor::Goto(10, 13),
+        color::Fg(color::Yellow)
+    )?;
+    write!(
+        screen,
+        "{}{} Space to shoot!",
+        termion::cursor::Goto(10, 14),
+        color::Fg(color::Yellow)
+    )?;
+    write!(
+        screen,
+        "{}{}Press 'S' to start the game",
+        termion::cursor::Goto(6, 21),
         color::Fg(color::Green)
     )?;
-    write!(screen, "{}{}Press 'Q' to quit",
-        termion::cursor::Goto(1, 5),
+    write!(
+        screen,
+        "{}{}Press 'Q' to quit",
+        termion::cursor::Goto(10, 22),
         color::Fg(color::Red)
     )?;
     screen.flush()?;
     Ok(())
 }
 
-fn display_game_over_screen(screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>, score: u32, level: usize, high_score: u32) -> io::Result<()> {
+fn display_game_over_screen(
+    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
+    score: u32,
+    level: usize,
+    high_score: u32,
+) -> io::Result<()> {
     write!(screen, "{}", termion::clear::All)?;
-    write!(screen, "{}{}{}Game Over!{}",
-        termion::cursor::Goto(1, 1),
+    write!(
+        screen,
+        "{}{}{}Game Over!{}",
+        termion::cursor::Goto(4, 6),
         termion::style::Bold,
         color::Fg(color::Red),
         color::Fg(color::Reset)
     )?;
-    write!(screen, "{}{}Final Score: {}",
-        termion::cursor::Goto(1, 3),
+    write!(
+        screen,
+        "{}{}Final Score: {}",
+        termion::cursor::Goto(4, 9),
         color::Fg(color::Yellow),
         score
     )?;
-    write!(screen, "{}{}Levels Completed: {}",
-        termion::cursor::Goto(1, 5),
+    write!(
+        screen,
+        "{}{}Levels Completed: {}",
+        termion::cursor::Goto(4, 10),
         color::Fg(color::Yellow),
         level - 1
     )?;
-    write!(screen, "{}{}High Score: {}",
-        termion::cursor::Goto(1, 7),
+    write!(
+        screen,
+        "{}{}High Score: {}",
+        termion::cursor::Goto(4, 12),
         color::Fg(color::Cyan),
         high_score
     )?;
-    write!(screen, "{}{}Press 'R' to play again",
-        termion::cursor::Goto(1, 9),
+    write!(
+        screen,
+        "{}{}Press 'R' to play again",
+        termion::cursor::Goto(4, 14),
         color::Fg(color::Green)
     )?;
-    write!(screen, "{}{}Press 'Q' to quit",
-        termion::cursor::Goto(1, 11),
+    write!(
+        screen,
+        "{}{}Press 'Q' to quit",
+        termion::cursor::Goto(4, 15),
         color::Fg(color::Red)
     )?;
     screen.flush()?;
