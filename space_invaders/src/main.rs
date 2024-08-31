@@ -32,6 +32,7 @@ struct Game {
     start_time: Instant,
     last_powerup_time: Instant,
     powerup_move_counter: usize,
+    paused: bool,
 }
 
 impl Game {
@@ -54,6 +55,7 @@ impl Game {
             start_time: Instant::now(),
             last_powerup_time: Instant::now(),
             powerup_move_counter: 0,
+            paused: false,
         }
     }
 
@@ -129,6 +131,10 @@ impl Game {
 
     // Update game state
     fn update(&mut self) {
+        if self.paused {
+            return;
+        }
+
         // Handle powerup timer
         if let Some(_) = self.powerup_active {
             if self.powerup_timer > 0 {
@@ -255,7 +261,7 @@ impl Game {
         screen[HEIGHT - 1][self.player] = 'A';
 
         // Draw enemies
-        for &(x, y, enemy_type, color) in &self.enemies {
+        for &(x, y, enemy_type, _color) in &self.enemies {
             if y < HEIGHT {
                 screen[y][x] = enemy_type;
             }
@@ -287,8 +293,8 @@ impl Game {
         }
 
         // Convert screen to string with colors
-        for (y, row) in screen.iter().enumerate() {
-            for (x, &ch) in row.iter().enumerate() {
+        for (_y, row) in screen.iter().enumerate() {
+            for (_x, &ch) in row.iter().enumerate() {
                 match ch {
                     'A' => output.push_str(&format!("{}", color::Fg(color::Blue))),
                     'Z' => output.push_str(&format!("{}", color::Fg(color::LightRed))),
@@ -313,10 +319,18 @@ impl Game {
     // Handle user input
     fn handle_input(&mut self, key: Key) {
         match key {
-            Key::Left => self.player = self.player.saturating_sub(1),
-            Key::Right => self.player = (self.player + 1).min(WIDTH - 1),
+            Key::Left => {
+                if !self.paused {
+                    self.player = self.player.saturating_sub(1)
+                }
+            }
+            Key::Right => {
+                if !self.paused {
+                    self.player = (self.player + 1).min(WIDTH - 1)
+                }
+            }
             Key::Char(' ') => {
-                if self.bullets.len() < 3 {
+                if !self.paused && self.bullets.len() < 3 {
                     // Limit the number of bullets
                     match self.powerup_active {
                         Some('B') => {
@@ -338,18 +352,23 @@ impl Game {
                     }
                 }
             }
+            Key::Char('p') | Key::Char('P') => {
+                self.paused = !self.paused;
+            }
             _ => {}
         }
 
         // Check for powerup collection
-        self.powerups.retain(|&powerup| {
-            if powerup.0 == self.player && powerup.1 == HEIGHT - 1 {
-                self.powerup_active = Some(powerup.2);
-                self.powerup_timer = 100; // Lasts for a few seconds
-                return false;
-            }
-            true
-        });
+        if !self.paused {
+            self.powerups.retain(|&powerup| {
+                if powerup.0 == self.player && powerup.1 == HEIGHT - 1 {
+                    self.powerup_active = Some(powerup.2);
+                    self.powerup_timer = 100; // Lasts for a few seconds
+                    return false;
+                }
+                true
+            });
+        }
     }
 
     // Check if the game is over
@@ -357,6 +376,7 @@ impl Game {
         self.lives == 0
     }
 }
+
 // Display the start screen
 fn display_start_screen(
     screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
@@ -388,6 +408,12 @@ fn display_start_screen(
         screen,
         "{}{} Space to shoot!",
         termion::cursor::Goto(10, 14),
+        color::Fg(color::Yellow)
+    )?;
+    write!(
+        screen,
+        "{}{}Press 'P' to pause/unpause",
+        termion::cursor::Goto(10, 15),
         color::Fg(color::Yellow)
     )?;
     write!(
@@ -478,6 +504,7 @@ fn display_tutorial_screen(
         termion::cursor::Goto(4, 16)
     )?;
     write!(screen, "{}Space - Shoot", termion::cursor::Goto(4, 17))?;
+    write!(screen, "{}P - Pause/Unpause", termion::cursor::Goto(4, 18))?;
 
     write!(
         screen,
@@ -551,6 +578,28 @@ fn display_game_over_screen(
     Ok(())
 }
 
+// Display the pause screen
+fn display_pause_screen(
+    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
+) -> io::Result<()> {
+    write!(
+        screen,
+        "{}{}{}GAME PAUSED{}",
+        termion::cursor::Goto(((WIDTH / 2) - 5).try_into().unwrap(), (HEIGHT / 2).try_into().unwrap()),
+        termion::style::Bold,
+        color::Fg(color::Yellow),
+        color::Fg(color::Reset)
+    )?;
+    write!(
+        screen,
+        "{}{}Press 'P' to resume",
+        termion::cursor::Goto(((WIDTH / 2) - 9).try_into().unwrap(), ((HEIGHT / 2) + 2).try_into().unwrap()),
+        color::Fg(color::Green)
+    )?;
+    screen.flush()?;
+    Ok(())
+}
+
 // Main function to run the game
 fn main() -> io::Result<()> {
     // Set up the terminal screen
@@ -606,6 +655,9 @@ fn main() -> io::Result<()> {
             if last_update.elapsed() >= Duration::from_millis(50) {
                 game.update();
                 write!(screen, "{}{}", termion::clear::All, game.render())?;
+                if game.paused {
+                    display_pause_screen(&mut screen)?;
+                }
                 screen.flush()?;
                 last_update = Instant::now();
 
