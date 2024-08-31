@@ -1,13 +1,7 @@
-# 🚀 Space Invaders Clone in Rust
+# 🚀 Space Invaders like game in Rust
 
 
-Welcome to **Space Invaders like game (pretty cool name isn't it?) in Rust** - a modern take on the classic arcade game, written entirely in Rust! Test your reflexes as you battle waves of aliens, dodge enemy fire, and save the galaxy!
-
-## 🌟 Features
-
-- **Classic Gameplay**: Inspired by the original Space Invaders, with a few modern twists.
-- **Smooth Performance**: Leveraging Rust’s speed and safety for a seamless gaming experience.
-- **Cross-Platform**: Play on Windows, macOS, and Linux.
+Welcome to **Space Invaders like game (pretty cool name isn't it?) in Rust** - a modern take on the classic arcade game, written entirely in Rust! 
 
 ## 🎮 Gameplay
 
@@ -16,7 +10,7 @@ Welcome to **Space Invaders like game (pretty cool name isn't it?) in Rust** - a
 - **Objective**: Destroy all the alien invaders before they reach the bottom of the screen. 
 
 ## 🚀 Installation
-- cd into the project directory and run "cargo run"
+- **Cd** into the project directory and run **"cargo run"**
 ### Prerequisites
 
 - Ensure you have [Rust](https://www.rust-lang.org/tools/install) installed on your system.
@@ -38,7 +32,7 @@ Here are some of the tasks and features i am working/planning to work on. Feel f
 ---
 ## 🤝 How to Contribute
 
-First of all, thanks for your interest in contributing! 🎉 This project is all about having fun and experimenting with Rust, so don’t worry—this isn't meant to be a super serious or polished game. The code isn't perfect, but that’s part of the charm!
+First of all, thanks for your interest in contributing! 🎉 This project is all about having fun and experimenting with Rust, so don’t worry—this isn't meant to be a super serious or polished game. The code nowhere near perfect(actually quite messy), but that’s part of the charm!
 
 ### Contributing Guidelines
 
