@@ -11,9 +11,11 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 
+// Define game constants
 const WIDTH: usize = 60;
 const HEIGHT: usize = 30;
 
+// Game struct to hold all game state
 struct Game {
     player: usize,
     enemies: Vec<(usize, usize, char, usize)>, // (x, y, type, color)
@@ -28,9 +30,12 @@ struct Game {
     powerup_active: Option<char>,
     powerup_timer: u8,
     start_time: Instant,
+    last_powerup_time: Instant,
+    powerup_move_counter: usize,
 }
 
 impl Game {
+    // Initialize a new game
     fn new() -> Self {
         let high_score = Game::load_high_score();
         Game {
@@ -47,9 +52,12 @@ impl Game {
             powerup_active: None,
             powerup_timer: 0,
             start_time: Instant::now(),
+            last_powerup_time: Instant::now(),
+            powerup_move_counter: 0,
         }
     }
 
+    // Load the high score from a file
     fn load_high_score() -> u32 {
         if let Ok(mut file) = OpenOptions::new().read(true).open("high_score.txt") {
             let mut content = String::new();
@@ -62,6 +70,7 @@ impl Game {
         0
     }
 
+    // Save the high score to a file
     fn save_high_score(&self) {
         if self.score > self.high_score {
             if let Ok(mut file) = OpenOptions::new()
@@ -75,6 +84,7 @@ impl Game {
         }
     }
 
+    // Create enemies based on the current level
     fn create_enemies(&self) -> Vec<(usize, usize, char, usize)> {
         let mut enemies = Vec::new();
         let mut rng = rand::thread_rng();
@@ -101,9 +111,11 @@ impl Game {
         enemies
     }
 
+    // Create a powerup
     fn create_powerup(&mut self) {
         let mut rng = rand::thread_rng();
-        if rng.gen_bool(0.05) {  // Increased spawn rate
+        // Only create a powerup if 30 seconds have passed and there are no existing powerups
+        if self.last_powerup_time.elapsed() >= Duration::from_secs(30) && self.powerups.is_empty() {
             let powerup_type = match rng.gen_range(0..3) {
                 0 => 'B', // Bigger Laser
                 1 => 'M', // Multi-directional Laser
@@ -111,9 +123,11 @@ impl Game {
             };
             self.powerups
                 .push((rng.gen_range(0..WIDTH), 0, powerup_type));
+            self.last_powerup_time = Instant::now();
         }
     }
 
+    // Update game state
     fn update(&mut self) {
         // Handle powerup timer
         if let Some(_) = self.powerup_active {
@@ -124,17 +138,33 @@ impl Game {
             }
         }
 
-        // Move bullets
+        // Move bullets and check for collisions with powerups
         self.bullets.retain_mut(|bullet| {
             bullet.1 = bullet.1.saturating_sub(1);
+
+            // Check for collisions with powerups
+            self.powerups.retain(|powerup| {
+                if bullet.0 == powerup.0 && bullet.1 == powerup.1 {
+                    self.powerup_active = Some(powerup.2);
+                    self.powerup_timer = 100; // Lasts for a few seconds
+                    false // Remove the powerup
+                } else {
+                    true // Keep the powerup
+                }
+            });
+
             bullet.1 > 0
         });
 
         // Move powerups
-        for powerup in &mut self.powerups {
-            powerup.1 += 1;
+        self.powerup_move_counter += 1;
+        if self.powerup_move_counter >= 20 - self.level.min(15) {
+            self.powerup_move_counter = 0;
+            for powerup in &mut self.powerups {
+                powerup.1 += 1;
+            }
+            self.powerups.retain(|powerup| powerup.1 < HEIGHT);
         }
-        self.powerups.retain(|powerup| powerup.1 < HEIGHT);
 
         // Check for collisions
         let initial_enemy_count = self.enemies.len();
@@ -145,7 +175,7 @@ impl Game {
                     hit = true;
                     self.explosions.push((enemy.0, enemy.1, 0));
                     if enemy.2 == 'H' {
-                        self.lives = (self.lives + 1).min(5);  // Cap lives at 5
+                        self.lives = (self.lives + 1).min(5); // Cap lives at 5
                     }
                     break;
                 }
@@ -166,7 +196,8 @@ impl Game {
                 for enemy in &mut self.enemies {
                     match enemy.2 {
                         'Z' => {
-                            enemy.0 = (enemy.0 + if enemy.1 % 4 < 2 { 1 } else { WIDTH - 1 }) % WIDTH;
+                            enemy.0 =
+                                (enemy.0 + if enemy.1 % 4 < 2 { 1 } else { WIDTH - 1 }) % WIDTH;
                             enemy.1 += 1;
                         }
                         'W' => {
@@ -201,6 +232,7 @@ impl Game {
         self.create_powerup();
     }
 
+    // Render the game state as a string
     fn render(&self) -> String {
         let elapsed = self.start_time.elapsed();
         let minutes = elapsed.as_secs() / 60;
@@ -278,6 +310,7 @@ impl Game {
         output
     }
 
+    // Handle user input
     fn handle_input(&mut self, key: Key) {
         match key {
             Key::Left => self.player = self.player.saturating_sub(1),
@@ -319,11 +352,12 @@ impl Game {
         });
     }
 
+    // Check if the game is over
     fn is_game_over(&self) -> bool {
         self.lives == 0
     }
 }
-
+// Display the start screen
 fn display_start_screen(
     screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
 ) -> io::Result<()> {
@@ -364,13 +398,98 @@ fn display_start_screen(
     )?;
     write!(
         screen,
+        "{}{}Press 'T' for tutorial",
+        termion::cursor::Goto(9, 22),
+        color::Fg(color::Blue)
+    )?;
+    write!(
+        screen,
         "{}{}Press 'Q' to quit",
-        termion::cursor::Goto(10, 22),
+        termion::cursor::Goto(11, 23),
         color::Fg(color::Red)
     )?;
     screen.flush()?;
     Ok(())
 }
+
+// Display the tutorial screen
+fn display_tutorial_screen(
+    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
+) -> io::Result<()> {
+    write!(screen, "{}", termion::clear::All)?;
+    write!(
+        screen,
+        "{}{}{}Tutorial{}",
+        termion::cursor::Goto(25, 2),
+        termion::style::Bold,
+        color::Fg(color::Cyan),
+        color::Fg(color::Reset)
+    )?;
+
+    write!(
+        screen,
+        "{}{}Enemies:{}",
+        termion::cursor::Goto(2, 4),
+        color::Fg(color::Yellow),
+        color::Fg(color::Reset)
+    )?;
+    write!(screen, "{}Z - Zigzag enemy", termion::cursor::Goto(4, 5))?;
+    write!(screen, "{}W - Wave enemy", termion::cursor::Goto(4, 6))?;
+    write!(screen, "{}D - Diagonal enemy", termion::cursor::Goto(4, 7))?;
+    write!(
+        screen,
+        "{}H - Health enemy (gives extra life when destroyed)",
+        termion::cursor::Goto(4, 8)
+    )?;
+
+    write!(
+        screen,
+        "{}{}Powerups:{}",
+        termion::cursor::Goto(2, 10),
+        color::Fg(color::Yellow),
+        color::Fg(color::Reset)
+    )?;
+    write!(
+        screen,
+        "{}B - Bigger Laser (3-wide shot)",
+        termion::cursor::Goto(4, 11)
+    )?;
+    write!(
+        screen,
+        "{}M - Multi-directional Laser (3-way shot)",
+        termion::cursor::Goto(4, 12)
+    )?;
+    write!(
+        screen,
+        "{}S - Shield (temporary invincibility)",
+        termion::cursor::Goto(4, 13)
+    )?;
+
+    write!(
+        screen,
+        "{}{}Controls:{}",
+        termion::cursor::Goto(2, 15),
+        color::Fg(color::Yellow),
+        color::Fg(color::Reset)
+    )?;
+    write!(
+        screen,
+        "{}Left/Right Arrow - Move ship",
+        termion::cursor::Goto(4, 16)
+    )?;
+    write!(screen, "{}Space - Shoot", termion::cursor::Goto(4, 17))?;
+
+    write!(
+        screen,
+        "{}{}Press 'B' to return to the main menu",
+        termion::cursor::Goto(2, 24),
+        color::Fg(color::Green)
+    )?;
+    screen.flush()?;
+    Ok(())
+}
+
+// Display the game over screen
 fn display_game_over_screen(
     screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
     score: u32,
@@ -432,10 +551,13 @@ fn display_game_over_screen(
     Ok(())
 }
 
+// Main function to run the game
 fn main() -> io::Result<()> {
+    // Set up the terminal screen
     let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
     let (tx, rx) = mpsc::channel();
 
+    // Spawn a thread to handle user input
     thread::spawn(move || {
         let stdin = io::stdin();
         for key in stdin.keys() {
@@ -448,35 +570,53 @@ fn main() -> io::Result<()> {
     });
 
     'main_loop: loop {
+        // Display the start screen
         display_start_screen(&mut screen)?;
 
+        // Wait for the user to start the game, view tutorial, or quit
         loop {
             if let Ok(key) = rx.recv() {
                 match key {
                     Key::Char('s') | Key::Char('S') => break,
+                    Key::Char('t') | Key::Char('T') => {
+                        display_tutorial_screen(&mut screen)?;
+                        loop {
+                            if let Ok(key) = rx.recv() {
+                                if let Key::Char('b') | Key::Char('B') = key {
+                                    break;
+                                }
+                            }
+                        }
+                        display_start_screen(&mut screen)?;
+                    }
                     Key::Char('q') | Key::Char('Q') => break 'main_loop,
                     _ => {}
                 }
             }
         }
 
+        // Initialize the game
         let mut game = Game::new();
         game.enemies = game.create_enemies();
         let mut last_update = Instant::now();
 
+        // Main game loop
         'game_loop: loop {
+            // Update game state every 50ms
             if last_update.elapsed() >= Duration::from_millis(50) {
                 game.update();
                 write!(screen, "{}{}", termion::clear::All, game.render())?;
                 screen.flush()?;
                 last_update = Instant::now();
 
+                // Check if the game is over
                 if game.is_game_over() {
                     game.save_high_score();
                     break 'game_loop;
                 }
             }
 
+            // Handle user input
             if let Ok(key) = rx.try_recv() {
                 match key {
                     Key::Ctrl('c') => break 'main_loop,
@@ -484,12 +624,21 @@ fn main() -> io::Result<()> {
                 }
             }
 
+            // Small sleep to prevent CPU hogging
             thread::sleep(Duration::from_millis(10));
         }
 
+        // Display game over screen
         let time_survived = game.start_time.elapsed();
-        display_game_over_screen(&mut screen, game.score, game.level, game.high_score, time_survived)?;
+        display_game_over_screen(
+            &mut screen,
+            game.score,
+            game.level,
+            game.high_score,
+            time_survived,
+        )?;
 
+        // Wait for the user to restart or quit
         loop {
             if let Ok(key) = rx.recv() {
                 match key {
