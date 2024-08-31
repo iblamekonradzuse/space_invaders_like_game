@@ -14,6 +14,7 @@ use termion::screen::AlternateScreen;
 // Define game constants
 const WIDTH: usize = 60;
 const HEIGHT: usize = 30;
+const LASER_HITBOX_WIDTH: usize = 3; // New constant for laser hitbox width
 
 // Game struct to hold all game state
 struct Game {
@@ -177,7 +178,10 @@ impl Game {
         self.enemies.retain(|&enemy| {
             let mut hit = false;
             for bullet in &self.bullets {
-                if bullet.0 == enemy.0 && bullet.1 == enemy.1 {
+                // Check if the enemy is within the bullet's hitbox
+                if (bullet.0.saturating_sub(LASER_HITBOX_WIDTH / 2)..=bullet.0.saturating_add(LASER_HITBOX_WIDTH / 2))
+                    .contains(&enemy.0) && bullet.1 == enemy.1
+                {
                     hit = true;
                     self.explosions.push((enemy.0, enemy.1, 0));
                     if enemy.2 == 'H' {
@@ -240,55 +244,71 @@ impl Game {
 
     // Render the game state as a string
     fn render(&self) -> String {
-        let elapsed = self.start_time.elapsed();
-        let minutes = elapsed.as_secs() / 60;
-        let seconds = elapsed.as_secs() % 60;
+        let mut output = String::new();
+        
+        // Only display the top info bar if the game is not paused
+        if !self.paused {
+            let elapsed = self.start_time.elapsed();
+            let minutes = elapsed.as_secs() / 60;
+            let seconds = elapsed.as_secs() % 60;
 
-        let mut output = format!(
-            "{}Score: {} | High Score: {} | Level: {} | Lives: {} | Time: {:02}:{:02}{}\r\n",
-            color::Fg(color::Yellow),
-            self.score,
-            self.high_score,
-            self.level,
-            "♥".repeat(self.lives),
-            minutes,
-            seconds,
-            color::Fg(color::Reset)
-        );
+            output.push_str(&format!(
+                "{}Score: {} | High Score: {} | Level: {} | Lives: {} | Time: {:02}:{:02}{}\r\n",
+                color::Fg(color::Yellow),
+                self.score,
+                self.high_score,
+                self.level,
+                "♥".repeat(self.lives),
+                minutes,
+                seconds,
+                color::Fg(color::Reset)
+            ));
+        }
+
         let mut screen = vec![vec![' '; WIDTH]; HEIGHT];
 
         // Draw player
-        screen[HEIGHT - 1][self.player] = 'A';
+        if !self.paused {
+            screen[HEIGHT - 1][self.player] = 'A';
+        }
 
         // Draw enemies
-        for &(x, y, enemy_type, _color) in &self.enemies {
-            if y < HEIGHT {
-                screen[y][x] = enemy_type;
+        if !self.paused {
+            for &(x, y, enemy_type, _color) in &self.enemies {
+                if y < HEIGHT {
+                    screen[y][x] = enemy_type;
+                }
             }
         }
 
         // Draw bullets
-        for &(x, y) in &self.bullets {
-            if y < HEIGHT {
-                screen[y][x] = '|';
+        if !self.paused {
+            for &(x, y) in &self.bullets {
+                if y < HEIGHT {
+                    screen[y][x] = '|';
+                }
             }
         }
 
         // Draw powerups
-        for &(x, y, powerup_type) in &self.powerups {
-            if y < HEIGHT {
-                screen[y][x] = powerup_type;
+        if !self.paused {
+            for &(x, y, powerup_type) in &self.powerups {
+                if y < HEIGHT {
+                    screen[y][x] = powerup_type;
+                }
             }
         }
 
         // Draw explosions
-        for &(x, y, frame) in &self.explosions {
-            if y < HEIGHT {
-                screen[y][x] = match frame {
-                    0 => '*',
-                    1 => '+',
-                    _ => ' ',
-                };
+        if !self.paused {
+            for &(x, y, frame) in &self.explosions {
+                if y < HEIGHT {
+                    screen[y][x] = match frame {
+                        0 => '*',
+                        1 => '+',
+                        _ => ' ',
+                    };
+                }
             }
         }
 
@@ -370,8 +390,7 @@ impl Game {
             });
         }
     }
-
-    // Check if the game is over
+// Check if the game is over
     fn is_game_over(&self) -> bool {
         self.lives == 0
     }
