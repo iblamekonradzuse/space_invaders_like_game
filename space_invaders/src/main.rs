@@ -42,6 +42,7 @@ struct Game {
     powerup_timer: u8,
     start_time: Instant,
     last_powerup_time: Instant,
+    last_health_enemy_time: Instant,
     powerup_move_counter: usize,
     paused: bool,
     boss: Option<Boss>,
@@ -63,6 +64,8 @@ struct Boss {
     max_health: u16,
     phase: u8,
     shoot_timer: u8,
+    direction: i8,
+    move_timer: u32,
 }
 
 impl Game {
@@ -77,13 +80,14 @@ impl Game {
             explosions: Vec::new(),
             score: 0,
             high_score,
-            level: 9,
+            level: 4,
             lives: 3,
             enemy_move_counter: 0,
             powerup_active: None,
             powerup_timer: 0,
             start_time: Instant::now(),
             last_powerup_time: Instant::now(),
+            last_health_enemy_time: Instant::now(),
             powerup_move_counter: 0,
             paused: false,
             boss: None,
@@ -118,7 +122,7 @@ impl Game {
     }
 
     // Create enemies based on the current level
-    fn create_enemies(&self) -> Vec<Enemy> {
+    fn create_enemies(&mut self) -> Vec<Enemy> {
         let mut enemies = Vec::new();
         let mut rng = rand::thread_rng();
         let rows = 1 + self.level / 3;
@@ -126,12 +130,15 @@ impl Game {
 
         for row in 0..rows {
             for col in 0..cols {
-                let enemy_type = match rng.gen_range(0..5) {
+                let enemy_type = match rng.gen_range(0..8) {
                     0 => 'Z', // Zigzag
                     1 => 'W', // Wave
                     2 => 'D', // Diagonal
-                    3 => 'H', // Health
-                    _ => 'S', // Shooter (new enemy type)
+                    3 => 'S', // Shooter
+                    4 => 'T', // Teleporter
+                    5 => 'F', // Fast
+                    6 => 'B', // Bomber
+                    _ => 'N', // Normal
                 };
                 let color = rng.gen_range(1..5);
                 enemies.push(Enemy {
@@ -139,11 +146,29 @@ impl Game {
                     y: row * 2 + 3,
                     enemy_type,
                     color,
-                    health: if enemy_type == 'S' { 2 } else { 1 },
+                    health: match enemy_type {
+                        'S' | 'T' | 'F' => 2,
+                        'B' => 3,
+                        _ => 1,
+                    },
                     shoot_timer: rng.gen_range(0..50),
                 });
             }
         }
+
+        // Add a health enemy if it's time
+        if self.last_health_enemy_time.elapsed() >= Duration::from_secs(60) {
+            enemies.push(Enemy {
+                x: rng.gen_range(0..WIDTH),
+                y: 0,
+                enemy_type: 'H',
+                color: 2,
+                health: 1,
+                shoot_timer: 0,
+            });
+            self.last_health_enemy_time = Instant::now();
+        }
+
         enemies
     }
 
@@ -218,7 +243,7 @@ impl Game {
         }
 
         // Check for collisions and update enemies
-        let _rng = rand::thread_rng();
+        let mut rng = rand::thread_rng();
         self.enemies.retain_mut(|enemy| {
             let mut hit = false;
             for bullet in &self.bullets {
@@ -234,19 +259,29 @@ impl Game {
                         if enemy.enemy_type == 'H' {
                             self.lives = (self.lives + 1).min(5);
                         }
-                        self.score += 10;
+                        self.score += match enemy.enemy_type {
+                            'S' | 'T' | 'F' => 20,
+                            'B' => 30,
+                            'H' => 50,
+                            _ => 10,
+                        };
                     }
                     break;
                 }
             }
 
             // Enemy shooting
-            if enemy.enemy_type == 'S' {
+            if enemy.enemy_type == 'S' || enemy.enemy_type == 'B' {
                 enemy.shoot_timer += 1;
                 if enemy.shoot_timer >= 50 {
                     enemy.shoot_timer = 0;
                     if self.bullets.len() < 10 {
                         self.bullets.push((enemy.x, enemy.y + 1, true));
+                        if enemy.enemy_type == 'B' {
+                            // Bomber shoots in 3 directions
+                            self.bullets.push((enemy.x.saturating_sub(1), enemy.y + 1, true));
+                            self.bullets.push((enemy.x + 1, enemy.y + 1, true));
+                        }
                     }
                 }
             }
@@ -260,7 +295,8 @@ impl Game {
             self.enemy_move_counter = 0;
             if self.enemies.is_empty() && self.boss.is_none() {
                 self.level += 1;
-                if self.level == 5 || self.level == 10 {
+                self.lives = (self.lives + 1).min(5); // Give player an extra life after beating a level
+                if self.level >= 5 && self.level % 5 == 0 {
                     self.spawn_boss();
                 } else {
                     self.enemies = self.create_enemies();
@@ -280,7 +316,18 @@ impl Game {
                             enemy.x = (enemy.x + 1) % WIDTH;
                             enemy.y += 1;
                         }
-                        'H' | 'S' => {
+                        'T' => {
+                            if rng.gen_bool(0.1) {
+                                enemy.x = rng.gen_range(0..WIDTH);
+                                enemy.y = rng.gen_range(0..HEIGHT / 2);
+                            } else {
+                                enemy.y += 1;
+                            }
+                        }
+                        'F' => {
+                            enemy.y += 2;
+                        }
+                        'H' | 'S' | 'B' | 'N' => {
                             enemy.y += 1;
                         }
                         _ => {}
@@ -294,41 +341,51 @@ impl Game {
             }
         }
 
-        // Update boss
-        if let Some(boss) = &mut self.boss {
-            boss.shoot_timer += 1;
-            if boss.shoot_timer >= 30 {
-                boss.shoot_timer = 0;
-                if self.bullets.len() < 10 {
-                    self.bullets.push((boss.x, boss.y + 1, true));
-                    if boss.phase >= 2 {
-                        self.bullets.push((boss.x.saturating_sub(2), boss.y + 1, true));
-                        self.bullets.push((boss.x + 2, boss.y + 1, true));
-                    }
-                }
+// Update boss
+if let Some(boss) = &mut self.boss {
+    boss.shoot_timer += 1;
+    if boss.shoot_timer >= 20 { // Changed from 20 to 10 for faster shooting
+        boss.shoot_timer = 0;
+        if self.bullets.len() < 15 { // Increased max bullets from 10 to 15
+            self.bullets.push((boss.x, boss.y + 1, true));
+            if boss.phase >= 2 {
+                self.bullets.push((boss.x.saturating_sub(2), boss.y + 1, true));
+                self.bullets.push((boss.x + 2, boss.y + 1, true));
             }
-
-            // Boss movement
-            boss.x = (boss.x + if boss.phase == 1 { 1 } else { WIDTH - 1 }) % WIDTH;
-
-            // Check for collisions with boss
-            for bullet in &self.bullets {
-                if !bullet.2 && (bullet.0.saturating_sub(2)..=bullet.0.saturating_add(2)).contains(&boss.x)
-                    && bullet.1 == boss.y
-                {
-                    boss.health = boss.health.saturating_sub(1);
-                    if boss.health == 0 {
-                        self.score += 1000;
-                        self.explosions.push((boss.x, boss.y, 0));
-                        self.boss = None;
-                        break;
-                    } else if boss.health == boss.max_health / 2 {
-                        boss.phase = 2;
-                    }
-                }
+            if boss.phase >= 3 {
+                self.bullets.push((boss.x.saturating_sub(4), boss.y + 1, true));
+                self.bullets.push((boss.x + 4, boss.y + 1, true));
             }
         }
-
+    }
+    // Boss movement
+    boss.move_timer += 1;
+    if boss.move_timer >= 12 { // Move every 12 frames instead of 3 (75% slower)
+        boss.move_timer = 0;
+        if boss.x == 0 || boss.x == WIDTH - 1 {
+            boss.direction *= -1;
+        }
+        boss.x = (boss.x as i32 + boss.direction as i32).max(0).min(WIDTH as i32 - 1) as usize;
+    }
+    // Check for collisions with boss
+    for bullet in &self.bullets {
+        if !bullet.2 && (bullet.0.saturating_sub(2)..=bullet.0.saturating_add(2)).contains(&boss.x)
+            && bullet.1 == boss.y
+        {
+            boss.health = boss.health.saturating_sub(1);
+            if boss.health == 0 {
+                self.score += 1000;
+                self.explosions.push((boss.x, boss.y, 0));
+                self.boss = None;
+                break;
+            } else if boss.health == boss.max_health * 2 / 3 {
+                boss.phase = 2;
+            } else if boss.health == boss.max_health / 3 {
+                boss.phase = 3;
+            }
+        }
+    }
+}
         // Move explosions
         for explosion in &mut self.explosions {
             explosion.2 += 1;
@@ -338,10 +395,9 @@ impl Game {
         // Create powerups
         self.create_powerup();
     }
-
-    // Spawn a boss
+// Spawn a boss
     fn spawn_boss(&mut self) {
-        let max_health = if self.level == 5 { 50 } else { 100 };
+        let max_health = 50 + self.level as u16 * 10;
         self.boss = Some(Boss {
             x: WIDTH / 2,
             y: 3,
@@ -349,6 +405,8 @@ impl Game {
             max_health,
             phase: 1,
             shoot_timer: 0,
+            direction: 1,
+            move_timer: 0,
         });
     }
 
@@ -419,6 +477,7 @@ impl Game {
                 }
             }
         }
+
         // Draw explosions
         if !self.paused {
             for &(x, y, frame) in &self.explosions {
@@ -442,11 +501,14 @@ impl Game {
                     'D' => output.push_str(&format!("{}", color::Fg(color::LightYellow))),
                     'H' => output.push_str(&format!("{}", color::Fg(color::Green))),
                     'S' => output.push_str(&format!("{}", color::Fg(color::Red))),
+                    'T' => output.push_str(&format!("{}", color::Fg(color::Cyan))),
+                    'F' => output.push_str(&format!("{}", color::Fg(color::LightBlue))),
                     'B' => output.push_str(&format!("{}", color::Fg(color::LightCyan))),
+                    'N' => output.push_str(&format!("{}", color::Fg(color::White))),
                     '|' => output.push_str(&format!("{}", color::Fg(color::Green))),
                     '↓' => output.push_str(&format!("{}", color::Fg(color::Red))),
                     '*' | '+' => output.push_str(&format!("{}", color::Fg(color::Red))),
-                    'B' => output.push_str(&format!("{}", color::Fg(color::Cyan))),
+                    'B' => output.push_str(&format!("{}", color::Fg(color::Magenta))),
                     'M' => output.push_str(&format!("{}", color::Fg(color::LightGreen))),
                     'S' => output.push_str(&format!("{}", color::Fg(color::LightBlue))),
                     '█' => output.push_str(&format!("{}", color::Fg(color::Green))),
@@ -521,11 +583,11 @@ impl Game {
 // Main function to run the game
 fn main() -> io::Result<()> {
     // Set up the terminal screen
-let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
+    let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
     let (tx, rx) = mpsc::channel();
 
     // Spawn a thread to handle user input
- thread::spawn(move || {
+    thread::spawn(move || {
         let stdin = io::stdin();
         for key in stdin.keys() {
             if let Ok(key) = key {
@@ -535,7 +597,8 @@ let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
             }
         }
     });
-'main_loop: loop {
+
+    'main_loop: loop {
         // Display the start screen
         display_start_screen(&mut screen)?;
 
@@ -561,12 +624,12 @@ let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
             }
         }
 
- // Initialize the game
+        // Initialize the game
         let mut game = Game::new();
         game.enemies = game.create_enemies();
         let mut last_update = Instant::now();
 
- // Main game loop
+        // Main game loop
         'game_loop: loop {
             // Update game state every 50ms
             if last_update.elapsed() >= Duration::from_millis(50) {
@@ -585,7 +648,7 @@ let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
                 }
             }
 
- // Handle user input
+            // Handle user input
             if let Ok(key) = rx.try_recv() {
                 match key {
                     Key::Ctrl('c') => break 'main_loop,
@@ -597,7 +660,7 @@ let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
             thread::sleep(Duration::from_millis(10));
         }
 
- // Display game over screen
+        // Display game over screen
         let time_survived = game.start_time.elapsed();
         display_game_over_screen(
             &mut screen,
@@ -607,8 +670,7 @@ let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
             time_survived,
         )?;
 
-
-         // Wait for the user to restart or quit
+        // Wait for the user to restart or quit
         loop {
             if let Ok(key) = rx.recv() {
                 match key {
@@ -622,4 +684,3 @@ let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
 
     Ok(())
 }
-
