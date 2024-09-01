@@ -11,6 +11,10 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 
+mod display_game_over_screen;
+mod display_pause_screen;
+mod display_start_screen;
+mod display_tutorial_screen;
 // Define game constants
 const WIDTH: usize = 60;
 const HEIGHT: usize = 30;
@@ -179,8 +183,10 @@ impl Game {
             let mut hit = false;
             for bullet in &self.bullets {
                 // Check if the enemy is within the bullet's hitbox
-                if (bullet.0.saturating_sub(LASER_HITBOX_WIDTH / 2)..=bullet.0.saturating_add(LASER_HITBOX_WIDTH / 2))
-                    .contains(&enemy.0) && bullet.1 == enemy.1
+                if (bullet.0.saturating_sub(LASER_HITBOX_WIDTH / 2)
+                    ..=bullet.0.saturating_add(LASER_HITBOX_WIDTH / 2))
+                    .contains(&enemy.0)
+                    && bullet.1 == enemy.1
                 {
                     hit = true;
                     self.explosions.push((enemy.0, enemy.1, 0));
@@ -245,7 +251,7 @@ impl Game {
     // Render the game state as a string
     fn render(&self) -> String {
         let mut output = String::new();
-        
+
         // Only display the top info bar if the game is not paused
         if !self.paused {
             let elapsed = self.start_time.elapsed();
@@ -390,234 +396,23 @@ impl Game {
             });
         }
     }
-// Check if the game is over
+    // Check if the game is over
     fn is_game_over(&self) -> bool {
         self.lives == 0
     }
 }
 
 // Display the start screen
-fn display_start_screen(
-    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
-) -> io::Result<()> {
-    write!(screen, "{}", termion::clear::All)?;
-    write!(
-        screen,
-        "{}{}{}✰✰✰ S P A C E ✰✰✰  {}",
-        termion::cursor::Goto(10, 8),
-        termion::style::Bold,
-        color::Fg(color::Cyan),
-        color::Fg(color::Reset)
-    )?;
-    write!(
-        screen,
-        "{}{}{}✰✰ I N V A D E R S ✰✰{}",
-        termion::cursor::Goto(8, 9),
-        termion::style::Bold,
-        color::Fg(color::Cyan),
-        color::Fg(color::Reset)
-    )?;
-    write!(
-        screen,
-        "{}{}Arrow keys to move,",
-        termion::cursor::Goto(10, 13),
-        color::Fg(color::Yellow)
-    )?;
-    write!(
-        screen,
-        "{}{} Space to shoot!",
-        termion::cursor::Goto(10, 14),
-        color::Fg(color::Yellow)
-    )?;
-    write!(
-        screen,
-        "{}{}Press 'P' to pause/unpause",
-        termion::cursor::Goto(10, 15),
-        color::Fg(color::Yellow)
-    )?;
-    write!(
-        screen,
-        "{}{}Press 'S' to start the game",
-        termion::cursor::Goto(6, 21),
-        color::Fg(color::Green)
-    )?;
-    write!(
-        screen,
-        "{}{}Press 'T' for tutorial",
-        termion::cursor::Goto(9, 22),
-        color::Fg(color::Blue)
-    )?;
-    write!(
-        screen,
-        "{}{}Press 'Q' to quit",
-        termion::cursor::Goto(11, 23),
-        color::Fg(color::Red)
-    )?;
-    screen.flush()?;
-    Ok(())
-}
+use display_start_screen::display_start_screen;
 
 // Display the tutorial screen
-fn display_tutorial_screen(
-    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
-) -> io::Result<()> {
-    write!(screen, "{}", termion::clear::All)?;
-    write!(
-        screen,
-        "{}{}{}Tutorial{}",
-        termion::cursor::Goto(25, 2),
-        termion::style::Bold,
-        color::Fg(color::Cyan),
-        color::Fg(color::Reset)
-    )?;
-
-    write!(
-        screen,
-        "{}{}Enemies:{}",
-        termion::cursor::Goto(2, 4),
-        color::Fg(color::Yellow),
-        color::Fg(color::Reset)
-    )?;
-    write!(screen, "{}Z - Zigzag enemy", termion::cursor::Goto(4, 5))?;
-    write!(screen, "{}W - Wave enemy", termion::cursor::Goto(4, 6))?;
-    write!(screen, "{}D - Diagonal enemy", termion::cursor::Goto(4, 7))?;
-    write!(
-        screen,
-        "{}H - Health enemy (gives extra life when destroyed)",
-        termion::cursor::Goto(4, 8)
-    )?;
-
-    write!(
-        screen,
-        "{}{}Powerups:{}",
-        termion::cursor::Goto(2, 10),
-        color::Fg(color::Yellow),
-        color::Fg(color::Reset)
-    )?;
-    write!(
-        screen,
-        "{}B - Bigger Laser (3-wide shot)",
-        termion::cursor::Goto(4, 11)
-    )?;
-    write!(
-        screen,
-        "{}M - Multi-directional Laser (3-way shot)",
-        termion::cursor::Goto(4, 12)
-    )?;
-    write!(
-        screen,
-        "{}S - Shield (temporary invincibility)",
-        termion::cursor::Goto(4, 13)
-    )?;
-
-    write!(
-        screen,
-        "{}{}Controls:{}",
-        termion::cursor::Goto(2, 15),
-        color::Fg(color::Yellow),
-        color::Fg(color::Reset)
-    )?;
-    write!(
-        screen,
-        "{}Left/Right Arrow - Move ship",
-        termion::cursor::Goto(4, 16)
-    )?;
-    write!(screen, "{}Space - Shoot", termion::cursor::Goto(4, 17))?;
-    write!(screen, "{}P - Pause/Unpause", termion::cursor::Goto(4, 18))?;
-
-    write!(
-        screen,
-        "{}{}Press 'B' to return to the main menu",
-        termion::cursor::Goto(2, 24),
-        color::Fg(color::Green)
-    )?;
-    screen.flush()?;
-    Ok(())
-}
+use display_tutorial_screen::display_tutorial_screen;
 
 // Display the game over screen
-fn display_game_over_screen(
-    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
-    score: u32,
-    level: usize,
-    high_score: u32,
-    time_survived: Duration,
-) -> io::Result<()> {
-    write!(screen, "{}", termion::clear::All)?;
-    write!(
-        screen,
-        "{}{}{}Game Over!{}",
-        termion::cursor::Goto(4, 6),
-        termion::style::Bold,
-        color::Fg(color::Red),
-        color::Fg(color::Reset)
-    )?;
-    write!(
-        screen,
-        "{}{}Final Score: {}",
-        termion::cursor::Goto(4, 9),
-        color::Fg(color::Yellow),
-        score
-    )?;
-    write!(
-        screen,
-        "{}{}Levels Completed: {}",
-        termion::cursor::Goto(4, 10),
-        color::Fg(color::Yellow),
-        level - 1
-    )?;
-    write!(
-        screen,
-        "{}{}Time Survived: {:02}:{:02}",
-        termion::cursor::Goto(4, 11),
-        color::Fg(color::Yellow),
-        time_survived.as_secs() / 60,
-        time_survived.as_secs() % 60
-    )?;
-    write!(
-        screen,
-        "{}{}High Score: {}",
-        termion::cursor::Goto(4, 13),
-        color::Fg(color::Cyan),
-        high_score
-    )?;
-    write!(
-        screen,
-        "{}{}Press 'R' to play again",
-        termion::cursor::Goto(4, 15),
-        color::Fg(color::Green)
-    )?;
-    write!(
-        screen,
-        "{}{}Press 'Q' to quit",
-        termion::cursor::Goto(4, 16),
-        color::Fg(color::Red)
-    )?;
-    screen.flush()?;
-    Ok(())
-}
+use display_game_over_screen::display_game_over_screen; // Import the function
 
 // Display the pause screen
-fn display_pause_screen(
-    screen: &mut AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
-) -> io::Result<()> {
-    write!(
-        screen,
-        "{}{}{}GAME PAUSED{}",
-        termion::cursor::Goto(((WIDTH / 2) - 5).try_into().unwrap(), (HEIGHT / 2).try_into().unwrap()),
-        termion::style::Bold,
-        color::Fg(color::Yellow),
-        color::Fg(color::Reset)
-    )?;
-    write!(
-        screen,
-        "{}{}Press 'P' to resume",
-        termion::cursor::Goto(((WIDTH / 2) - 9).try_into().unwrap(), ((HEIGHT / 2) + 2).try_into().unwrap()),
-        color::Fg(color::Green)
-    )?;
-    screen.flush()?;
-    Ok(())
-}
+use display_pause_screen::display_pause_screen;
 
 // Main function to run the game
 fn main() -> io::Result<()> {
