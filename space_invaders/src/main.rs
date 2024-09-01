@@ -85,7 +85,7 @@ impl Game {
             explosions: Vec::new(),
             score: 0,
             high_score,
-            level: 4,
+            level: 1,
             lives: 3,
             enemy_move_counter: 0,
             powerup_active: None,
