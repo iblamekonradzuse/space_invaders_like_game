@@ -37,7 +37,7 @@ pub fn display_start_screen(
     write!(
         screen,
         "{}{}Press 'P' to pause/unpause",
-        termion::cursor::Goto(10, 15),
+        termion::cursor::Goto(6, 15),
         color::Fg(color::Yellow)
     )?;
     write!(

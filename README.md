@@ -23,11 +23,12 @@ Here are some of the tasks and features i am working/planning to work on. Feel f
 - [X] **Power-Ups**: Add power-ups like shields, rapid-fire, and double points.
 - [X] **Enemy Variations**: Introduce different types of enemies with unique behaviors.
 - [X] **Tutorial Screen**: Implement a tutorial screen to guide new players on how to play the game.
+- [X] **Pause Menu**: Create a pause menu with options to resume, restart, or quit.
+- [X] **Boss with Multiple Phases:** Implement a boss fight with multiple phases and a health bar.
+- [X] **Sound Effects and Music**: Integrate retro sound effects and background music.
+- [X] **Refactor Codebase**: Clean up and optimize the code for better performance and readability.
 - [ ] **Better Rendering**: Optimize and enhance rendering for reducing screen tear.
-- [ ] **Sound Effects and Music**: Integrate retro sound effects and background music.
-- [ ] **Pause Menu**: Create a pause menu with options to resume, restart, or quit.
 - [ ] **Settings Menu**: Add a settings menu for adjusting volume, controls, and display options.
-- [ ] **Refactor Codebase**: Clean up and optimize the code for better performance and readability.
 - [ ] **Couch Co-op Mode**: Develop a local co-op mode where two players can play together on the same device.
 ---
 ## 🤝 How to Contribute
@@ -55,8 +56,9 @@ No contribution is too small, and there’s no pressure here—whether you’re 
 
 
 ## 📸 Screenshots
-
+The way the game looks is highly dependent on your terminal color scheme. </br>
 ![Game Screenshot](/screen_shots/title_screen.jpg)
-![alt text](/screen_shots/in_game.png)
-![alt text](/screen_shots/tutorial_screen.png)
-
+![alt text](/screen_shots/tutorial_screen.jpg)
+![alt text](/screen_shots/in_game.jpg)
+![alt text](/screen_shots/boss.png)
+![alt text](/screen_shots/game_over.jpg)

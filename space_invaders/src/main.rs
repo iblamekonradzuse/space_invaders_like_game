@@ -1,6 +1,9 @@
 use rand::Rng;
+use rodio::{Decoder, OutputStream, Sink, Source};
+use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::io::BufReader;
 use std::io::{self, stdout, Write};
 use std::sync::mpsc;
 use std::thread;
@@ -25,6 +28,7 @@ use crate::display_tutorial_screen::display_tutorial_screen;
 const WIDTH: usize = 60;
 const HEIGHT: usize = 30;
 const LASER_HITBOX_WIDTH: usize = 3;
+const IMMUNITY_DURATION: Duration = Duration::from_secs(1);
 
 // Game struct to hold all game state
 struct Game {
@@ -46,6 +50,7 @@ struct Game {
     powerup_move_counter: usize,
     paused: bool,
     boss: Option<Boss>,
+    last_hit_time: Option<Instant>,
 }
 
 struct Enemy {
@@ -91,6 +96,7 @@ impl Game {
             powerup_move_counter: 0,
             paused: false,
             boss: None,
+            last_hit_time: None,
         }
     }
 
@@ -224,8 +230,20 @@ impl Game {
             });
 
             // Check for collisions with player
-            if bullet.2 && bullet.1 == HEIGHT - 1 && (bullet.0 == self.player || bullet.0 == self.player.saturating_sub(1) || bullet.0 == self.player + 1) {
-                self.lives = self.lives.saturating_sub(1);
+            if bullet.2
+                && bullet.1 == HEIGHT - 1
+                && (bullet.0 == self.player
+                    || bullet.0 == self.player.saturating_sub(1)
+                    || bullet.0 == self.player + 1)
+            {
+                // Check if player is immune
+                if self
+                    .last_hit_time
+                    .map_or(true, |time| time.elapsed() >= IMMUNITY_DURATION)
+                {
+                    self.lives = self.lives.saturating_sub(1);
+                    self.last_hit_time = Some(Instant::now());
+                }
                 false
             } else {
                 bullet.1 > 0 && bullet.1 < HEIGHT
@@ -247,9 +265,10 @@ impl Game {
         self.enemies.retain_mut(|enemy| {
             let mut hit = false;
             for bullet in &self.bullets {
-                if !bullet.2 && (bullet.0.saturating_sub(LASER_HITBOX_WIDTH / 2)
-                    ..=bullet.0.saturating_add(LASER_HITBOX_WIDTH / 2))
-                    .contains(&enemy.x)
+                if !bullet.2
+                    && (bullet.0.saturating_sub(LASER_HITBOX_WIDTH / 2)
+                        ..=bullet.0.saturating_add(LASER_HITBOX_WIDTH / 2))
+                        .contains(&enemy.x)
                     && bullet.1 == enemy.y
                 {
                     enemy.health -= 1;
@@ -279,7 +298,8 @@ impl Game {
                         self.bullets.push((enemy.x, enemy.y + 1, true));
                         if enemy.enemy_type == 'B' {
                             // Bomber shoots in 3 directions
-                            self.bullets.push((enemy.x.saturating_sub(1), enemy.y + 1, true));
+                            self.bullets
+                                .push((enemy.x.saturating_sub(1), enemy.y + 1, true));
                             self.bullets.push((enemy.x + 1, enemy.y + 1, true));
                         }
                     }
@@ -305,7 +325,8 @@ impl Game {
                 for enemy in &mut self.enemies {
                     match enemy.enemy_type {
                         'Z' => {
-                            enemy.x = (enemy.x + if enemy.y % 4 < 2 { 1 } else { WIDTH - 1 }) % WIDTH;
+                            enemy.x =
+                                (enemy.x + if enemy.y % 4 < 2 { 1 } else { WIDTH - 1 }) % WIDTH;
                             enemy.y += 1;
                         }
                         'W' => {
@@ -333,7 +354,14 @@ impl Game {
                         _ => {}
                     }
                     if enemy.y >= HEIGHT - 1 {
-                        self.lives = self.lives.saturating_sub(1);
+                        // Check if player is immune
+                        if self
+                            .last_hit_time
+                            .map_or(true, |time| time.elapsed() >= IMMUNITY_DURATION)
+                        {
+                            self.lives = self.lives.saturating_sub(1);
+                            self.last_hit_time = Some(Instant::now());
+                        }
                         self.enemies = self.create_enemies();
                         break;
                     }
@@ -341,51 +369,50 @@ impl Game {
             }
         }
 
-// Update boss
-if let Some(boss) = &mut self.boss {
-    boss.shoot_timer += 1;
-    if boss.shoot_timer >= 20 { // Changed from 20 to 10 for faster shooting
-        boss.shoot_timer = 0;
-        if self.bullets.len() < 15 { // Increased max bullets from 10 to 15
-            self.bullets.push((boss.x, boss.y + 1, true));
-            if boss.phase >= 2 {
-                self.bullets.push((boss.x.saturating_sub(2), boss.y + 1, true));
-                self.bullets.push((boss.x + 2, boss.y + 1, true));
+        // Update boss
+        if let Some(boss) = &mut self.boss {
+            boss.shoot_timer += 1;
+            if boss.shoot_timer >= 20 {
+                boss.shoot_timer = 0;
+                if self.bullets.len() < 15 {
+                    self.bullets.push((boss.x, boss.y + 1, true));
+                    if boss.phase >= 2 {
+                        self.bullets
+                            .push((boss.x.saturating_sub(2), boss.y + 1, true));
+                        self.bullets.push((boss.x + 2, boss.y + 1, true));
+                    }
+                }
             }
-            if boss.phase >= 3 {
-                self.bullets.push((boss.x.saturating_sub(4), boss.y + 1, true));
-                self.bullets.push((boss.x + 4, boss.y + 1, true));
+            // Boss movement
+            boss.move_timer += 1;
+            if boss.move_timer >= 12 {
+                boss.move_timer = 0;
+                if boss.x == 0 || boss.x == WIDTH - 1 {
+                    boss.direction *= -1;
+                }
+                boss.x = (boss.x as i32 + boss.direction as i32)
+                    .max(0)
+                    .min(WIDTH as i32 - 1) as usize;
+            }
+            // Check for collisions with boss
+            for bullet in &self.bullets {
+                if !bullet.2
+                    && (bullet.0.saturating_sub(2)..=bullet.0.saturating_add(2)).contains(&boss.x)
+                    && bullet.1 == boss.y
+                {
+                    boss.health = boss.health.saturating_sub(1);
+                    if boss.health == 0 {
+                        self.score += 1000;
+                        self.explosions.push((boss.x, boss.y, 0));
+                        self.boss = None;
+                        break;
+                    } else if boss.health == boss.max_health / 2 {
+                        boss.phase = 2;
+                    }
+                }
             }
         }
-    }
-    // Boss movement
-    boss.move_timer += 1;
-    if boss.move_timer >= 12 { // Move every 12 frames instead of 3 (75% slower)
-        boss.move_timer = 0;
-        if boss.x == 0 || boss.x == WIDTH - 1 {
-            boss.direction *= -1;
-        }
-        boss.x = (boss.x as i32 + boss.direction as i32).max(0).min(WIDTH as i32 - 1) as usize;
-    }
-    // Check for collisions with boss
-    for bullet in &self.bullets {
-        if !bullet.2 && (bullet.0.saturating_sub(2)..=bullet.0.saturating_add(2)).contains(&boss.x)
-            && bullet.1 == boss.y
-        {
-            boss.health = boss.health.saturating_sub(1);
-            if boss.health == 0 {
-                self.score += 1000;
-                self.explosions.push((boss.x, boss.y, 0));
-                self.boss = None;
-                break;
-            } else if boss.health == boss.max_health * 2 / 3 {
-                boss.phase = 2;
-            } else if boss.health == boss.max_health / 3 {
-                boss.phase = 3;
-            }
-        }
-    }
-}
+
         // Move explosions
         for explosion in &mut self.explosions {
             explosion.2 += 1;
@@ -395,9 +422,10 @@ if let Some(boss) = &mut self.boss {
         // Create powerups
         self.create_powerup();
     }
-// Spawn a boss
+
+    // Spawn a boss
     fn spawn_boss(&mut self) {
-        let max_health = 50 + self.level as u16 * 10;
+        let max_health = (25 + self.level as u16 * 5).max(1); // Halved from 50 + self.level * 10
         self.boss = Some(Boss {
             x: WIDTH / 2,
             y: 3,
@@ -436,7 +464,14 @@ if let Some(boss) = &mut self.boss {
 
         // Draw player
         if !self.paused {
-            screen[HEIGHT - 1][self.player] = 'A';
+            screen[HEIGHT - 1][self.player] = if self
+                .last_hit_time
+                .map_or(false, |time| time.elapsed() < IMMUNITY_DURATION)
+            {
+                '△' // Invincible player
+            } else {
+                'A' // Normal player
+            };
         }
 
         // Draw enemies
@@ -456,7 +491,8 @@ if let Some(boss) = &mut self.boss {
             let health_percentage = boss.health as f32 / boss.max_health as f32;
             let filled_width = (health_percentage * health_bar_width as f32) as usize;
             for i in 0..health_bar_width {
-                screen[1][i + (WIDTH - health_bar_width) / 2] = if i < filled_width { '█' } else { '░' };
+                screen[1][i + (WIDTH - health_bar_width) / 2] =
+                    if i < filled_width { '█' } else { '░' };
             }
         }
 
@@ -496,6 +532,7 @@ if let Some(boss) = &mut self.boss {
             for (_x, &ch) in row.iter().enumerate() {
                 match ch {
                     'A' => output.push_str(&format!("{}", color::Fg(color::Blue))),
+                    '△' => output.push_str(&format!("{}", color::Fg(color::LightBlue))),
                     'Z' => output.push_str(&format!("{}", color::Fg(color::LightRed))),
                     'W' => output.push_str(&format!("{}", color::Fg(color::LightMagenta))),
                     'D' => output.push_str(&format!("{}", color::Fg(color::LightYellow))),
@@ -524,7 +561,7 @@ if let Some(boss) = &mut self.boss {
     }
 
     // Handle user input
-    fn handle_input(&mut self, key: Key) {
+    fn handle_input(&mut self, key: Key, laser_sink: &Sink) {
         match key {
             Key::Left => {
                 if !self.paused {
@@ -538,17 +575,28 @@ if let Some(boss) = &mut self.boss {
             }
             Key::Char(' ') => {
                 if !self.paused && self.bullets.iter().filter(|&b| !b.2).count() < 3 {
+                    // Play laser sound
+                    let file = BufReader::new(File::open("src/audio/laser.mp3").unwrap());
+                    let source = Decoder::new(file).unwrap();
+                    laser_sink.append(source);
+
                     match self.powerup_active {
                         Some('B') => {
                             // Bigger Laser
                             self.bullets.push((self.player, HEIGHT - 2, false));
-                            self.bullets.push((self.player.saturating_sub(1), HEIGHT - 2, false));
-                            self.bullets.push(((self.player + 1).min(WIDTH - 1), HEIGHT - 2, false));
+                            self.bullets
+                                .push((self.player.saturating_sub(1), HEIGHT - 2, false));
+                            self.bullets.push((
+                                (self.player + 1).min(WIDTH - 1),
+                                HEIGHT - 2,
+                                false,
+                            ));
                         }
                         Some('M') => {
                             // Multi-directional Laser
                             self.bullets.push((self.player, HEIGHT - 2, false));
-                            self.bullets.push((self.player.saturating_sub(1), HEIGHT - 2, false));
+                            self.bullets
+                                .push((self.player.saturating_sub(1), HEIGHT - 2, false));
                             self.bullets.push((self.player + 1, HEIGHT - 2, false));
                         }
                         _ => self.bullets.push((self.player, HEIGHT - 2, false)),
@@ -585,6 +633,19 @@ fn main() -> io::Result<()> {
     // Set up the terminal screen
     let mut screen = AlternateScreen::from(stdout().into_raw_mode()?);
     let (tx, rx) = mpsc::channel();
+
+    // Set up audio
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let sink = Sink::try_new(&stream_handle).unwrap();
+    let file = BufReader::new(File::open("src/audio/background.mp3").unwrap());
+    let source = Decoder::new(file).unwrap();
+    sink.append(source);
+    sink.set_volume(0.5);
+    sink.play();
+
+    // Set up laser sound
+    let laser_sink = Sink::try_new(&stream_handle).unwrap();
+    laser_sink.set_volume(0.3);
 
     // Spawn a thread to handle user input
     thread::spawn(move || {
@@ -652,7 +713,7 @@ fn main() -> io::Result<()> {
             if let Ok(key) = rx.try_recv() {
                 match key {
                     Key::Ctrl('c') => break 'main_loop,
-                    key => game.handle_input(key),
+                    key => game.handle_input(key, &laser_sink),
                 }
             }
 

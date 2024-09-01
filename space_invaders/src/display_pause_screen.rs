@@ -12,7 +12,7 @@ pub fn display_pause_screen(
         screen,
         "{}{}{}GAME PAUSED{}",
         termion::cursor::Goto(
-            ((WIDTH / 2) - 5).try_into().unwrap(),
+            ((WIDTH / 2) - 20).try_into().unwrap(),
             (HEIGHT / 2).try_into().unwrap()
         ),
         termion::style::Bold,
@@ -23,7 +23,7 @@ pub fn display_pause_screen(
         screen,
         "{}{}Press 'P' to resume",
         termion::cursor::Goto(
-            ((WIDTH / 2) - 9).try_into().unwrap(),
+            ((WIDTH / 2) - 24).try_into().unwrap(),
             ((HEIGHT / 2) + 2).try_into().unwrap()
         ),
         color::Fg(color::Green)
