@@ -68,10 +68,10 @@ Feel free to check out their other works and support them!
 ## 📸 Gameplay Footage 
 The way the game looks is highly dependent on your terminal color scheme. </br>
 ### Video Demo
-[![Demo video](https://img.youtube.com/vi/1Cn5XYcONdY/0.jpg)](https://youtu.be/1Cn5XYcONdY?si=rnyowXrif2aejSCb)
+[![Demo video](https://img.youtube.com/vi/e39uqCYLxFI/0.jpg)](https://youtu.be/e39uqCYLxFI?si=kC6RwWp_4XEYrArr)
 ### Screenshots
 ![Game Screenshot](/screen_shots/title_screen.jpg)
 ![alt text](/screen_shots/tutorial_screen.jpg)
 ![alt text](/screen_shots/in_game.jpg)
-![alt text](/screen_shots/boss.png)
+![alt text](/screen_shots/boss.ing)
 ![alt text](/screen_shots/game_over.jpg)
