@@ -27,9 +27,8 @@ Here are some of the tasks and features i am working/planning to work on. Feel f
 - [X] **Boss with Multiple Phases:** Implement a boss fight with multiple phases and a health bar.
 - [X] **Sound Effects and Music**: Integrate retro sound effects and background music.
 - [X] **Refactor Codebase**: Clean up and optimize the code for better performance and readability.
-- [ ] **Better Rendering**: Optimize and enhance rendering for reducing screen tear.
-- [ ] **Settings Menu**: Add a settings menu for adjusting volume, controls, and display options.
-- [ ] **Couch Co-op Mode**: Develop a local co-op mode where two players can play together on the same device.
+- [X] **Settings Menu**: Add a settings menu for adjusting volume, controls, and display options.
+- [X] **Better Rendering**: Optimize and enhance rendering for reducing screen tear.
 ---
 ## 🤝 How to Contribute
 
@@ -53,10 +52,24 @@ No contribution is too small, and there’s no pressure here—whether you’re 
 ---
 
 *Remember, this project is just for fun, so enjoy the process and don’t stress about making everything perfect.*
+## Music Credits
+
+The following tracks were used in the development of this game. All rights to the music belong to their respective creators. Click the links to listen to the tracks on YouTube.
+
+### Main Theme
+- **Track Title**: [In To The Sun](https://youtu.be/inqHHOai9V0?si=gxyYofQmc_efEbLx)
 
 
-## 📸 Screenshots
+### Sound Effects
+- **Track Title**: [RETRO LASER GUN ](https://youtu.be/agbFhHUsGpo?si=1_3ov3HMkdD214KX)
+
+Feel free to check out their other works and support them!
+
+## 📸 Gameplay Footage 
 The way the game looks is highly dependent on your terminal color scheme. </br>
+### Video Demo
+[![Demo video](https://img.youtube.com/vi/1Cn5XYcONdY/0.jpg)](https://youtu.be/1Cn5XYcONdY?si=rnyowXrif2aejSCb)
+### Screenshots
 ![Game Screenshot](/screen_shots/title_screen.jpg)
 ![alt text](/screen_shots/tutorial_screen.jpg)
 ![alt text](/screen_shots/in_game.jpg)

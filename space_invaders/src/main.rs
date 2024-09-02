@@ -663,6 +663,8 @@ fn main() -> io::Result<()> {
 
     let mut laser_volume: f32 = 0.3; // Initial laser volume
     let mut music_volume: f32 = 0.5; // Initial music volume
+    let mut last_update_time = std::time::Instant::now();
+
     'main_loop: loop {
         // Display the start screen
         display_start_screen(&mut screen)?;
@@ -696,6 +698,19 @@ fn main() -> io::Result<()> {
                                             laser_volume += 0.1;
                                             laser_sink.set_volume(laser_volume);
                                             // Adjust laser volume
+                                            let now = std::time::Instant::now();
+                                            if now.duration_since(last_update_time)
+                                                >= Duration::new(2, 0)
+                                            {
+                                                clear_line();
+                                                print_laser_volume(laser_volume);
+                                                last_update_time = now;
+                                            } else {
+                                                // Clear previous line and print the new value
+                                                clear_line();
+                                                print_laser_volume(laser_volume);
+                                                last_update_time = now;
+                                            }
                                         }
                                     }
 
@@ -705,6 +720,19 @@ fn main() -> io::Result<()> {
                                             laser_volume -= 0.1;
                                             laser_sink.set_volume(laser_volume);
                                             // Adjust laser volume
+                                            let now = std::time::Instant::now();
+                                            if now.duration_since(last_update_time)
+                                                >= Duration::new(2, 0)
+                                            {
+                                                clear_line();
+                                                print_laser_volume(laser_volume);
+                                                last_update_time = now;
+                                            } else {
+                                                // Clear previous line and print the new value
+                                                clear_line();
+                                                print_laser_volume(laser_volume);
+                                                last_update_time = now;
+                                            }
                                         }
                                     }
 
@@ -713,6 +741,20 @@ fn main() -> io::Result<()> {
                                         if music_volume < 1.0 {
                                             music_volume += 0.1;
                                             sink.set_volume(music_volume); // Adjust music volume
+
+                                            let now = std::time::Instant::now();
+                                            if now.duration_since(last_update_time)
+                                                >= Duration::new(2, 0)
+                                            {
+                                                clear_line();
+                                                print_music_volume(music_volume);
+                                                last_update_time = now;
+                                            } else {
+                                                // Clear previous line and print the new value
+                                                clear_line();
+                                                print_music_volume(music_volume);
+                                                last_update_time = now;
+                                            }
                                         }
                                     }
 
@@ -721,6 +763,19 @@ fn main() -> io::Result<()> {
                                         if music_volume > 0.0 {
                                             music_volume -= 0.1;
                                             sink.set_volume(music_volume); // Adjust music volume
+                                            let now = std::time::Instant::now();
+                                            if now.duration_since(last_update_time)
+                                                >= Duration::new(2, 0)
+                                            {
+                                                clear_line();
+                                                print_music_volume(music_volume);
+                                                last_update_time = now;
+                                            } else {
+                                                // Clear previous line and print the new value
+                                                clear_line();
+                                                print_music_volume(music_volume);
+                                                last_update_time = now;
+                                            }
                                         }
                                     }
 
@@ -734,6 +789,21 @@ fn main() -> io::Result<()> {
                     _ => {}
                 }
             }
+        }
+        fn clear_line() {
+            print!("\x1B[2K\r"); // ANSI escape code to clear the current line
+            io::stdout().flush().unwrap();
+        }
+
+        fn print_laser_volume(laser_volume: f32) {
+            // Print the volume percentage
+            print!("         Laser volume: {:.0}%", (laser_volume * 100.0));
+            io::stdout().flush().unwrap();
+        }
+        fn print_music_volume(music_volume: f32) {
+            // Print the volume percentage
+            print!("         Music volume: {:.0}%", (music_volume * 101.0));
+            io::stdout().flush().unwrap();
         }
 
         // Initialize the game

@@ -11,7 +11,7 @@ pub fn display_start_screen(
         "{}{}{}✰✰✰ S P A C E ✰✰✰  {}",
         termion::cursor::Goto(10, 8),
         termion::style::Bold,
-        color::Fg(color::Cyan),
+        color::Fg(color::LightCyan),
         color::Fg(color::Reset)
     )?;
     write!(
@@ -32,7 +32,7 @@ pub fn display_start_screen(
         screen,
         "{}{} Space to shoot!",
         termion::cursor::Goto(10, 14),
-        color::Fg(color::Yellow)
+        color::Fg(color::LightYellow)
     )?;
     write!(
         screen,
@@ -56,7 +56,7 @@ pub fn display_start_screen(
         screen,
         "{}{}Press 'O' for options",
         termion::cursor::Goto(9, 23),
-        color::Fg(color::Yellow)
+        color::Fg(color::Magenta)
     )?;
     write!(
         screen,
