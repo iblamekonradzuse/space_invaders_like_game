@@ -54,8 +54,14 @@ pub fn display_start_screen(
     )?;
     write!(
         screen,
+        "{}{}Press 'O' for options",
+        termion::cursor::Goto(9, 23),
+        color::Fg(color::Yellow)
+    )?;
+    write!(
+        screen,
         "{}{}Press 'Q' to quit",
-        termion::cursor::Goto(11, 23),
+        termion::cursor::Goto(11, 25),
         color::Fg(color::Red)
     )?;
     screen.flush()?;

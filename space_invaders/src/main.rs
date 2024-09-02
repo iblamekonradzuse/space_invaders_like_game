@@ -15,11 +15,13 @@ use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 
 mod display_game_over_screen;
+mod display_option_screen;
 mod display_pause_screen;
 mod display_start_screen;
 mod display_tutorial_screen;
 
 use crate::display_game_over_screen::display_game_over_screen;
+use crate::display_option_screen::display_option_screen;
 use crate::display_pause_screen::display_pause_screen;
 use crate::display_start_screen::display_start_screen;
 use crate::display_tutorial_screen::display_tutorial_screen;
@@ -659,6 +661,8 @@ fn main() -> io::Result<()> {
         }
     });
 
+    let mut laser_volume: f32 = 0.3; // Initial laser volume
+    let mut music_volume: f32 = 0.5; // Initial music volume
     'main_loop: loop {
         // Display the start screen
         display_start_screen(&mut screen)?;
@@ -674,6 +678,53 @@ fn main() -> io::Result<()> {
                             if let Ok(key) = rx.recv() {
                                 if let Key::Char('b') | Key::Char('B') = key {
                                     break;
+                                }
+                            }
+                        }
+                        display_start_screen(&mut screen)?;
+                    }
+                    Key::Char('o') | Key::Char('O') => {
+                        display_option_screen(&mut screen)?;
+                        loop {
+                            if let Ok(key) = rx.recv() {
+                                match key {
+                                    Key::Char('b') | Key::Char('B') => break, // Go back to start screen
+
+                                    // Increase laser volume
+                                    Key::Char('+') => {
+                                        if laser_volume < 1.0 {
+                                            laser_volume += 0.1;
+                                            laser_sink.set_volume(laser_volume);
+                                            // Adjust laser volume
+                                        }
+                                    }
+
+                                    // Decrease laser volume
+                                    Key::Char('-') => {
+                                        if laser_volume > 0.0 {
+                                            laser_volume -= 0.1;
+                                            laser_sink.set_volume(laser_volume);
+                                            // Adjust laser volume
+                                        }
+                                    }
+
+                                    // Increase background music volume
+                                    Key::Char(']') => {
+                                        if music_volume < 1.0 {
+                                            music_volume += 0.1;
+                                            sink.set_volume(music_volume); // Adjust music volume
+                                        }
+                                    }
+
+                                    // Decrease background music volume
+                                    Key::Char('[') => {
+                                        if music_volume > 0.0 {
+                                            music_volume -= 0.1;
+                                            sink.set_volume(music_volume); // Adjust music volume
+                                        }
+                                    }
+
+                                    _ => {}
                                 }
                             }
                         }
