@@ -64,7 +64,7 @@ The following tracks were used in the development of this game. All rights to th
 
 Feel free to check out their other works and support them!
 
-📸 Gameplay Footage 
+## 📸 Gameplay Footage 
 The way the game looks is highly dependent on your terminal color scheme. </br>
 ### Video Demo
 [![Demo video](https://img.youtube.com/vi/e39uqCYLxFI/0.jpg)](https://youtu.be/e39uqCYLxFI?si=kC6RwWp_4XEYrArr)
