@@ -1,10 +1,12 @@
 use rand::Rng;
-use rodio::{Decoder, OutputStream, Sink, Source};
+use rodio::{Decoder, OutputStream, Sink};
+use std::env;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::{self, stdout, Write};
+use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -54,7 +56,7 @@ struct Game {
     boss: Option<Boss>,
     last_hit_time: Option<Instant>,
 }
-
+#[allow(dead_code)]
 struct Enemy {
     x: usize,
     y: usize,
@@ -101,7 +103,6 @@ impl Game {
             last_hit_time: None,
         }
     }
-
     // Load the high score from a file
     fn load_high_score() -> u32 {
         if let Ok(mut file) = OpenOptions::new().read(true).open("high_score.txt") {
@@ -547,9 +548,7 @@ impl Game {
                     '|' => output.push_str(&format!("{}", color::Fg(color::Green))),
                     '↓' => output.push_str(&format!("{}", color::Fg(color::Red))),
                     '*' | '+' => output.push_str(&format!("{}", color::Fg(color::Red))),
-                    'B' => output.push_str(&format!("{}", color::Fg(color::Magenta))),
                     'M' => output.push_str(&format!("{}", color::Fg(color::LightGreen))),
-                    'S' => output.push_str(&format!("{}", color::Fg(color::LightBlue))),
                     '█' => output.push_str(&format!("{}", color::Fg(color::Green))),
                     '░' => output.push_str(&format!("{}", color::Fg(color::Red))),
                     _ => output.push_str(&format!("{}", color::Fg(color::Reset))),
@@ -578,7 +577,8 @@ impl Game {
             Key::Char(' ') => {
                 if !self.paused && self.bullets.iter().filter(|&b| !b.2).count() < 3 {
                     // Play laser sound
-                    let file = BufReader::new(File::open("src/audio/laser.mp3").unwrap());
+                    let laser_path = get_asset_path("laser.mp3");
+                    let file = BufReader::new(File::open(&laser_path).unwrap());
                     let source = Decoder::new(file).unwrap();
                     laser_sink.append(source);
 
@@ -630,6 +630,31 @@ impl Game {
     }
 }
 
+// Get the path to an asset file
+fn get_asset_path(file_name: &str) -> String {
+    let exe_path = env::current_exe().unwrap_or_default();
+    let exe_dir = exe_path.parent().unwrap_or_else(|| Path::new(""));
+
+    let possible_paths = vec![
+        format!("src/audio/{}", file_name),
+        format!("audio/{}", file_name),
+        exe_dir
+            .join("audio")
+            .join(file_name)
+            .to_string_lossy()
+            .into_owned(),
+    ];
+
+    for path in possible_paths {
+        if Path::new(&path).exists() {
+            return path;
+        }
+    }
+
+    // If no file is found, return the last attempted path
+    format!("audio/{}", file_name)
+}
+
 // Main function to run the game
 fn main() -> io::Result<()> {
     // Set up the terminal screen
@@ -639,12 +664,21 @@ fn main() -> io::Result<()> {
     // Set up audio
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let sink = Sink::try_new(&stream_handle).unwrap();
-    let file = BufReader::new(File::open("src/audio/background.mp3").unwrap());
-    let source = Decoder::new(file).unwrap();
-    sink.append(source);
-    sink.set_volume(0.5);
-    sink.play();
-
+    let background_path = get_asset_path("background.mp3");
+    match File::open(&background_path) {
+        Ok(file) => {
+            let file = BufReader::new(file);
+            match Decoder::new(file) {
+                Ok(source) => {
+                    sink.append(source);
+                    sink.set_volume(0.5);
+                    sink.play();
+                }
+                Err(e) => eprintln!("Error decoding audio file: {}", e),
+            }
+        }
+        Err(e) => eprintln!("Error opening audio file: {}. Path: {}", e, background_path),
+    }
     // Set up laser sound
     let laser_sink = Sink::try_new(&stream_handle).unwrap();
     laser_sink.set_volume(0.3);

@@ -8,3 +8,9 @@ termion = "1.5.6"
 rand = "0.8"
 rodio = "0.17"
 
+[build-dependencies]
+fs_extra = "1.2"
+
+[[bin]]
+name = "space_invaders"
+path = "src/main.rs"
