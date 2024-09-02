@@ -52,7 +52,7 @@ No contribution is too small, and there’s no pressure here—whether you’re 
 ---
 
 *Remember, this project is just for fun, so enjoy the process and don’t stress about making everything perfect.*
-## Music Credits
+## 🎵 Music Credits
 
 The following tracks were used in the development of this game. All rights to the music belong to their respective creators. Click the links to listen to the tracks on YouTube.
 
@@ -64,8 +64,8 @@ The following tracks were used in the development of this game. All rights to th
 - **Track Title**: [RETRO LASER GUN ](https://youtu.be/agbFhHUsGpo?si=1_3ov3HMkdD214KX)
 
 Feel free to check out their other works and support them!
-
-## 📸 Gameplay Footage 
+<details>
+<summary> 📸 Gameplay Footage </summary>
 The way the game looks is highly dependent on your terminal color scheme. </br>
 ### Video Demo
 [![Demo video](https://img.youtube.com/vi/e39uqCYLxFI/0.jpg)](https://youtu.be/e39uqCYLxFI?si=kC6RwWp_4XEYrArr)
@@ -76,3 +76,4 @@ The way the game looks is highly dependent on your terminal color scheme. </br>
 ![boss](/screen_shots/boss.jpg)
 ![options](/screen_shots/options.jpg)
 ![game over](/screen_shots/game_over.jpg)
+</details>
